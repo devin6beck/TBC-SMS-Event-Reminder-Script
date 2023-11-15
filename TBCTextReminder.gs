@@ -68,3 +68,47 @@ function sendSMSToNumber(message, number) {
     console.log(`Error sending SMS: ${error.toString()}`);
   }
 }
+
+function sendPreemptiveReminder() {
+  // Retrieve script properties for spreadsheet and calendar IDs
+  const properties = PropertiesService.getScriptProperties();
+  const sheet = SpreadsheetApp.openById(properties.getProperty('SPREADSHEET_ID')).getSheetByName('PhoneList');
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues();
+  
+  // Create a map of names to phone numbers
+  const namesToNumbers = {};
+  data.forEach(([name, number]) => {
+    namesToNumbers[name.toLowerCase()] = number;
+  });
+
+  // Get events for the day after tomorrow
+  const dayAfterTomorrow = new Date();
+  dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2);
+  const events = CalendarApp.getCalendarById(properties.getProperty('CALENDAR_ID')).getEventsForDay(dayAfterTomorrow);
+
+  // Check for relevant events and prepare a message for reminders
+  let messageToHannah = "Preemptive reminders for upcoming events:";
+  const namesForReminders = [];
+  
+  events.forEach(event => {
+    const title = event.getTitle().toLowerCase();
+    Object.keys(namesToNumbers).forEach(name => {
+      if (title.includes(name)) {
+        namesForReminders.push(name);
+      }
+    });
+  });
+
+  // Send a collective reminder if there are names to remind
+  if (namesForReminders.length > 0) {
+    messageToHannah += `\n\n${namesForReminders.join(", ")}.`;
+    const phoneNumberToNotify = properties.getProperty('NOTIFY_PHONE_NUMBER'); // Set this property in the script properties
+    if (phoneNumberToNotify) {
+      sendSMSToNumber(messageToHannah, phoneNumberToNotify);
+    } else {
+      console.log("Notification number is invalid or not set.");
+    }
+  } else {
+    console.log("No preemptive reminders to send.");
+  }
+}
